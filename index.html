@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Astronaut Experience - Lusion Style</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    /* Reset de estilos */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* Estilos generales del cuerpo */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      color: #fff;
+      overflow-x: hidden; /* IMPORTANTE: El scroll lo maneja el contenido, no el body */
+      cursor: default;
+      /* Asegura que el body sea el elemento scrolleable para ScrollTrigger */
+      height: 300vh; /* Haz el body muy largo para tener suficiente scroll */
+      position: relative; /* Para el z-index de las secciones */
+    }
+
+    /* Scrollbar personalizada */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(45deg, #f093fb, #f5576c);
+      border-radius: 4px;
+    }
+
+    /* Canvas 3D fijo */
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      z-index: 1; /* Detrás del contenido HTML */
+      pointer-events: none; /* Permite interactuar con el contenido debajo del canvas */
+    }
+
+    #canvas3d {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Contenido scrolleable - para superponer al canvas */
+    .content {
+      position: relative;
+      z-index: 2; /* Por encima del canvas */
+      pointer-events: none; /* Deshabilita interacciones por defecto en .content */
+    }
+
+    .section {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 20px;
+      position: relative;
+      pointer-events: auto; /* Habilita interacciones dentro de las secciones */
+      text-align: center; /* Centrar contenido de sección */
+    }
+
+    .container {
+      max-width: 900px; /* Ancho más estrecho para el texto central */
+      width: 100%;
+      margin: 0 auto;
+      pointer-events: auto; /* Habilita interacciones dentro del contenedor */
+    }
+
+    .section h1 {
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #fff 0%, #f093fb 50%, #f5576c 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+    }
+
+    .section p {
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
+      opacity: 0.8;
+      margin-bottom: 40px;
+      font-weight: 300;
+      line-height: 1.5;
+    }
+
+    .cta-button {
+      display: inline-block;
+      padding: 18px 40px;
+      background: linear-gradient(135deg, #f093fb, #f5576c);
+      color: white;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      border: none;
+      pointer-events: auto; /* Asegura que el botón sea interactivo */
+    }
+
+    .cta-button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 20px 40px rgba(240, 147, 251, 0.3);
+    }
+
+    /* Scroll indicator */
+    .scroll-indicator {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      animation: bounce 2s infinite;
+      pointer-events: none; /* No debe interferir con clics */
+    }
+    .scroll-indicator::before {
+      content: '↓';
+      font-size: 2rem;
+      opacity: 0.5;
+    }
+
+    /* Animaciones */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
+      40% { transform: translateX(-50%) translateY(-20px); }
+      60% { transform: translateX(-50%) translateY(-10px); }
+    }
+    .fade-in {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: all 0.8s ease; /* Transición CSS para elementos no controlados por ScrollTrigger */
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Loading screen */
+    .loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+    .loader {
+      width: 60px;
+      height: 60px;
+      border: 3px solid rgba(240, 147, 251, 0.2);
+      border-top-color: #f093fb;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.150.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.150.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loader"></div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="canvas3d"></canvas>
+  </div>
+
+  <div class="content">
+    <section class="section hero">
+      <div class="container">
+        <h1>Welcome to a New <span class="gradient-text">Dimension</span></h1>
+        <p>Explore the cosmos and beyond with our interactive journey.</p>
+        <a href="#section2" class="cta-button">
+          <span>Start Your Odyssey</span>
+        </a>
+      </div>
+      <div class="scroll-indicator"></div>
+    </section>
+
+    <section class="section" id="section2">
+      <div class="container">
+        <h1>Unleash the <span class="gradient-text">Power</span> of Interactivity</h1>
+        <p>Witness seamless transitions and dynamic movements that respond to your every scroll.</p>
+        <a href="#section3" class="cta-button">
+          <span>Discover the Flow</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" id="section3">
+      <div class="container">
+        <h1>Beyond the <span class="gradient-text">Horizon</span></h1>
+        <p>Our technologies push boundaries, creating experiences never before imagined.</p>
+        <a href="#section4" class="cta-button">
+          <span>Join the Future</span>
+        </a>
+      </div>
+    </section>
+
+     <section class="section" id="section4">
+      <div class="container">
+        <h1>The Journey <span class="gradient-text">Continues</span></h1>
+        <p>Connect with us and embark on your next adventure.</p>
+        <a href="#" class="cta-button">
+          <span>Contact Us</span>
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://unpkg.com/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/gsap@3.12.5/dist/ScrollToPlugin.min.js"></script> <script type="module">
+    // Three.js Imports
+    import * as THREE from 'three';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { BloomPass } from 'three/addons/postprocessing/BloomPass.js'; // Ejemplo de efecto
+    import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js'; // Ejemplo de efecto
+    // Puedes añadir más como SAOPass, SMAAPass, etc.
+
+    // GSAP Plugin Registration
+    gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
+
+    // Global Scene Variables
+    let scene, camera, renderer, composer;
+    let astronaut, mixer, animationAction;
+    let clock = new THREE.Clock();
+    let mouseX = 0, mouseY = 0;
+
+    // Camera and Astronaut State (for GSAP animation)
+    // These will be tweened by GSAP based on scroll
+    const cameraState = {
+        x: 0, y: 0, z: 5,
+        rotX: 0, rotY: 0, rotZ: 0,
+        fov: 50 // Field of View, to simulate zooming
+    };
+
+    const astronautState = {
+        x: 0, y: 0, z: 0,
+        rotX: 0, rotY: 0, rotZ: 0,
+        scale: 0.05 // Initial scale
+    };
+
+    // --- Init Three.js Scene ---
+    function init() {
+      // Scene
+      scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x000000, 5, 20); // Ajustado para un poco más de profundidad
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(
+        cameraState.fov,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(cameraState.x, cameraState.y, cameraState.z);
+
+      // Renderer
+      const canvas = document.getElementById('canvas3d');
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true,
+        alpha: true // Important for transparent background
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      renderer.useLegacyLights = false;
+
+      // Post-processing Composer
+      composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+
+      // --- Add Post-processing Effects (Examples) ---
+      // Lusion uses sophisticated effects. Here are basic examples.
+      // You'll need to fine-tune these or add others based on your desired look.
+      // const bloomPass = new BloomPass(1.2); // intensity
+      // composer.addPass(bloomPass);
+
+      // const outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), scene, camera);
+      // outlinePass.visibleEdgeColor.set('#ffffff'); // white outline
+      // outlinePass.hiddenEdgeColor.set('#190a05'); // dark red
+      // composer.addPass(outlinePass);
+      // --- End Post-processing Effects ---
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      directionalLight.position.set(5, 5, 5);
+      scene.add(directionalLight);
+
+      const fillLight = new THREE.DirectionalLight(0xf093fb, 0.7);
+      fillLight.position.set(-5, 0, -5);
+      scene.add(fillLight);
+
+      const rimLight = new THREE.DirectionalLight(0xf5576c, 0.4);
+      rimLight.position.set(0, -5, -10);
+      scene.add(rimLight);
+
+      createParticles();
+      loadAstronaut();
+
+      window.addEventListener('resize', onWindowResize);
+      window.addEventListener('mousemove', onMouseMove);
+
+      animate();
+    }
+
+    // --- Particles ---
+    function createParticles() {
+      const geometry = new THREE.BufferGeometry();
+      const count = 1500; // More particles
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+
+      for (let i = 0; i < count * 3; i += 3) {
+        positions[i] = (Math.random() - 0.5) * 50; // Larger spread
+        positions[i + 1] = (Math.random() - 0.5) * 50;
+        positions[i + 2] = (Math.random() - 0.5) * 50;
+
+        const color = Math.random() > 0.5 ?
+          new THREE.Color(0xf093fb) :
+          new THREE.Color(0xf5576c);
+
+        colors[i] = color.r;
+        colors[i + 1] = color.g;
+        colors[i + 2] = color.b;
+      }
+
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      const material = new THREE.PointsMaterial({
+        size: 0.08, // Slightly larger particles
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.7,
+        blending: THREE.AdditiveBlending
+      });
+
+      const particles = new THREE.Points(geometry, material);
+      particles.name = 'backgroundParticles';
+      scene.add(particles);
+    }
+
+    // --- Load Astronaut ---
+    function loadAstronaut() {
+      const loader = new FBXLoader();
+
+      loader.load(
+        'Floating.fbx', // Ensure this file is in the same directory
+        (fbx) => {
+          astronaut = fbx;
+
+          // Set initial state from astronautState object
+          astronaut.scale.setScalar(astronautState.scale);
+          astronaut.position.set(astronautState.x, astronautState.y, astronautState.z);
+          astronaut.rotation.set(astronautState.rotX, astronautState.rotY, astronautState.rotZ);
+
+
+          // --- DEBUGIING VISIBILITY: START (Temporary Material) ---
+          // Keep this active until you see your astronaut with a good size/position.
+          // Once visible, COMMENT OUT or REMOVE this entire block
+          // to see the astronaut with its original materials.
+          astronaut.traverse((child) => {
+              if (child.isMesh) {
+                  // child.material = new THREE.MeshNormalMaterial(); // Good for quick debugging normals
+                  child.material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+              }
+          });
+          // --- DEBUGIING VISIBILITY: END ---
+
+
+          scene.add(astronaut);
+
+          // Setup animation mixer if animations are present
+          if (fbx.animations && fbx.animations.length > 0) {
+            mixer = new THREE.AnimationMixer(astronaut);
+            animationAction = mixer.clipAction(fbx.animations[0]);
+            animationAction.play();
+            console.log("✅ FBX has animations. Playing first animation.");
+          } else {
+            console.warn("⚠️ FBX model does NOT contain any animations. The 'floating' effect will rely on GSAP and manual movements only.");
+          }
+
+          // Setup GSAP animations only after the model is loaded
+          setupGSAPAnimations();
+
+          // Hide loading screen
+          setTimeout(() => {
+            document.getElementById('loadingScreen').style.opacity = '0';
+            setTimeout(() => {
+              document.getElementById('loadingScreen').style.display = 'none';
+            }, 500);
+          }, 500);
+        },
+        (progress) => {
+          if (progress.total > 0) {
+            const percent = (progress.loaded / progress.total * 100).toFixed(2);
+            // console.log('Loading...', percent + '%'); // Keep console logging if needed for debugging
+          }
+        },
+        (error) => {
+          console.error('❌ Error loading model:', error);
+          document.getElementById('loadingScreen').style.display = 'none';
+        }
+      );
+    }
+
+    // --- GSAP ScrollTrigger Animations ---
+    function setupGSAPAnimations() {
+        // Define the ScrollTrigger for the entire body
+        const tl = gsap.timeline({
+            scrollTrigger: {
+                trigger: "body",
+                start: "top top",
+                end: "bottom bottom",
+                scrub: true, // Smoothly link animation to scroll
+                // markers: true, // Uncomment to see markers for debugging the scroll trigger
+                onUpdate: self => {
+                    if (mixer && animationAction) {
+                        animationAction.timeScale = 1 + self.progress * 2; // Speed up FBX animation with scroll
+                    }
+                }
+            }
+        });
+
+        // --- CAMERA ANIMATION (Lusion.co style) ---
+        // This is where you define camera positions, rotations, and FOV for different scroll points.
+        // Each .to() corresponds to a segment of the scroll.
+        // The 'position' parameter in .to() (e.g., '0', '1', '2') means the position in the timeline.
+        // It's usually a value between 0 and 1 representing the progress of the entire scroll,
+        // or a label string if you want to use labels.
+
+        // Section 1: Initial state (hero section)
+        tl.to(cameraState, {
+            x: 0, y: 0, z: 5,
+            rotX: 0, rotY: 0, rotZ: 0,
+            fov: 50
+        }, 0); // At 0% scroll
+
+        // Section 2: Move camera slightly up and closer, maybe look at a different angle
+        tl.to(cameraState, {
+            x: 0.5, y: 0.5, z: 3,
+            rotX: -0.1, rotY: 0.2, rotZ: 0
+        }, 0.25); // At 25% scroll (corresponds to entering section 2)
+
+        // Section 3: Move camera further, change perspective
+        tl.to(cameraState, {
+            x: -1, y: 1, z: 8,
+            rotX: 0.2, rotY: -0.3, rotZ: 0.1
+        }, 0.5); // At 50% scroll (corresponds to entering section 3)
+
+        // Section 4: Final camera position
+        tl.to(cameraState, {
+            x: 0, y: 2, z: 10,
+            rotX: -0.3, rotY: 0, rotZ: 0
+        }, 0.75); // At 75% scroll (corresponds to entering section 4)
+
+
+        // --- ASTRONAUT ANIMATION (Lusion.co style) ---
+        // This is where you define the astronaut's path, rotations, and scale.
+        // You'll likely need multiple FBX animations if you want complex state changes.
+
+        // Section 1: Initial astronaut state
+        if (astronaut) { // Ensure astronaut is loaded before animating it
+            tl.to(astronautState, {
+                x: 0, y: 0, z: 0,
+                rotX: 0, rotY: 0, rotZ: 0,
+                scale: 0.05
+            }, 0);
+
+            // Section 2: Astronaut moves up, rotates, maybe scales slightly
+            tl.to(astronautState, {
+                x: 1.5, y: 0.8, z: -2, // Move right and up, slightly back
+                rotX: Math.PI * 0.1, rotY: Math.PI * 0.5, rotZ: Math.PI * 0.05, // Rotate
+                scale: 0.08 // Slightly larger
+            }, 0.25);
+
+            // Section 3: Astronaut moves to new position, new rotation
+            tl.to(astronautState, {
+                x: -1.0, y: -0.5, z: 1, // Move left and down, slightly forward
+                rotX: Math.PI * 0.3, rotY: Math.PI * 1.2, rotZ: Math.PI * 0.1,
+                scale: 0.06 // Slightly smaller again
+            }, 0.5);
+
+            // Section 4: Final astronaut position for the end
+            tl.to(astronautState, {
+                x: 0, y: 0.5, z: 0, // Center it again
+                rotX: Math.PI * 0.05, rotY: Math.PI * 2, rotZ: Math.PI * 0.03, // A final rotation
+                scale: 0.07 // Final scale
+            }, 0.75);
+        }
+    }
+
+    // --- Mouse Move for Subtle Rotation ---
+    function onMouseMove(event) {
+      mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+    }
+
+    // --- Window Resize ---
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      if (composer) { // Update composer size if it exists
+        composer.setSize(window.innerWidth, window.innerHeight);
+      }
+    }
+
+    // --- Animation Loop ---
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const deltaTime = clock.getDelta();
+
+      if (mixer) {
+        mixer.update(deltaTime); // Update FBX animation
+      }
+
+      if (astronaut) {
+        // Apply GSAP-tweened state to astronaut
+        astronaut.position.set(astronautState.x, astronautState.y, astronautState.z);
+        astronaut.rotation.set(astronautState.rotX, astronautState.rotY, astronautState.rotZ);
+        astronaut.scale.setScalar(astronautState.scale);
+
+        // Apply subtle mouse-based rotation (can be added on top of GSAP rotation)
+        astronaut.rotation.x += (mouseY * 0.05 - astronaut.rotation.x) * 0.05;
+        astronaut.rotation.y += (mouseX * 0.05 - astronaut.rotation.y) * 0.05;
+
+        // Apply subtle floating independent of scroll
+        astronaut.position.x += Math.sin(Date.now() * 0.0005) * 0.01;
+        astronaut.position.y += Math.cos(Date.now() * 0.0007) * 0.01;
+      }
+
+      // Apply GSAP-tweened state to camera
+      camera.position.set(cameraState.x, cameraState.y, cameraState.z);
+      camera.rotation.set(cameraState.rotX, cameraState.rotY, cameraState.rotZ);
+      camera.fov = cameraState.fov;
+      camera.updateProjectionMatrix();
+
+      // Rotate background particles slowly
+      const particles = scene.getObjectByName('backgroundParticles');
+      if (particles) {
+        particles.rotation.y += 0.0005;
+      }
+
+      // Render the scene (using composer if available, else direct renderer)
+      if (composer) {
+        composer.render();
+      } else {
+        renderer.render(scene, camera);
+      }
+    }
+
+    // --- Smooth Scroll for Internal Links ---
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          gsap.to(window, { duration: 1.5, scrollTo: { y: target.offsetTop, autoKill: false }, ease: "power2.inOut" });
+        }
+      });
+    });
+
+    // Initialize the 3D application once the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
